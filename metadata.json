@@ -1,0 +1,8 @@
+{
+  "name": "Remix: Remix: Remix: Remix: 성구 및 시험 암기 학습기",
+  "description": "성구와 시험 답안을 1단계(단어 조합), 2단계(빈칸 완성), 3단계(완전 쓰기)로 체계적으로 마스터하는 자기주도 학습기",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
