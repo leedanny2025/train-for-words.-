@@ -662,6 +662,56 @@ export default function App() {
                     <span className="text-xs font-semibold text-slate-500">실시간 피드백 검증 모드</span>
                   </div>
                 </div>
+
+                {/* 3. 오답 노트 폴더 */}
+                <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs">
+                  <h2 className="text-sm font-bold mb-3 flex items-center gap-2 text-slate-800">
+                    <span className="w-1.5 h-4 bg-rose-500 rounded-full" />
+                    📌 오답 노트
+                  </h2>
+                  <div className="flex flex-col gap-0.5 max-h-36 overflow-y-auto mb-3">
+                    {incorrectFolders.map((folder) => {
+                      const isInFolder = (folderMappings[folder.id] || []).includes(currentItem.id);
+                      return (
+                        <label key={folder.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={isInFolder}
+                            onChange={() => handleToggleItemInFolder(currentItem.id, folder.id)}
+                            className="w-3.5 h-3.5 rounded border-slate-300 text-rose-600 focus:ring-rose-400 cursor-pointer"
+                          />
+                          <span className="text-xs font-semibold text-slate-700 truncate flex-1">{folder.name}</span>
+                          {isInFolder && <span className="text-[9px] text-rose-500 font-bold shrink-0">✓ 추가됨</span>}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const input = e.currentTarget.elements.namedItem('studyNewFolder') as HTMLInputElement;
+                      const val = input.value.trim();
+                      if (val) {
+                        handleAddFolder(val, currentItem.id);
+                        input.value = '';
+                      }
+                    }}
+                    className="flex gap-1.5"
+                  >
+                    <input
+                      type="text"
+                      name="studyNewFolder"
+                      placeholder="새 폴더 이름..."
+                      className="flex-1 text-[11px] px-2 py-1.5 rounded-lg border border-slate-200 focus:outline-none focus:border-rose-400 bg-white text-slate-700 font-medium placeholder-slate-400"
+                    />
+                    <button
+                      type="submit"
+                      className="text-[10px] bg-rose-600 hover:bg-rose-700 text-white font-bold px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors whitespace-nowrap"
+                    >
+                      새 폴더
+                    </button>
+                  </form>
+                </div>
               </aside>
 
               {/* Main Exercise Area */}
