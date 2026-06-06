@@ -76,6 +76,17 @@ export default function App() {
     localStorage.setItem('memorization_study_exam_stage_mode', mode);
   };
 
+  // Verse study configuration (ALL, STAGE1_ONLY, STAGE2_ONLY, STAGE3_ONLY)
+  const [verseStageMode, setVerseStageMode] = useState<'ALL' | 'STAGE1_ONLY' | 'STAGE2_ONLY' | 'STAGE3_ONLY'>(() => {
+    const saved = localStorage.getItem('memorization_study_verse_stage_mode');
+    return (saved as 'ALL' | 'STAGE1_ONLY' | 'STAGE2_ONLY' | 'STAGE3_ONLY') || 'ALL';
+  });
+
+  const handleSetVerseStageMode = (mode: 'ALL' | 'STAGE1_ONLY' | 'STAGE2_ONLY' | 'STAGE3_ONLY') => {
+    setVerseStageMode(mode);
+    localStorage.setItem('memorization_study_verse_stage_mode', mode);
+  };
+
   // Load custom questions and progress from LocalStorage on startup
   useEffect(() => {
     // 1. Progress State loading
@@ -266,18 +277,19 @@ export default function App() {
     saveProgressToStorage(updatedProgress);
   };
 
+  const getStartingStage = (item: StudyItem): 'STAGE1' | 'STAGE2' | 'STAGE3' => {
+    if (item.type === ItemType.Exam) {
+      return examStageMode === 'STAGE2_ONLY' ? 'STAGE3' : 'STAGE2';
+    }
+    if (verseStageMode === 'STAGE2_ONLY') return 'STAGE2';
+    if (verseStageMode === 'STAGE3_ONLY') return 'STAGE3';
+    return 'STAGE1';
+  };
+
   // Launch a standard learning session for a card
   const handleStartStudy = (item: StudyItem) => {
     setCurrentItem(item);
-    if (item.type === ItemType.Exam) {
-      if (examStageMode === 'STAGE2_ONLY') {
-        setCurrentStage('STAGE3');
-      } else {
-        setCurrentStage('STAGE2');
-      }
-    } else {
-      setCurrentStage('STAGE1');
-    }
+    setCurrentStage(getStartingStage(item));
   };
 
   // Select a random card to study
@@ -293,15 +305,7 @@ export default function App() {
     setSessionQueue(items);
     setCurrentQueueIndex(0);
     setCurrentItem(items[0]);
-    if (items[0].type === ItemType.Exam) {
-      if (examStageMode === 'STAGE2_ONLY') {
-        setCurrentStage('STAGE3');
-      } else {
-        setCurrentStage('STAGE2');
-      }
-    } else {
-      setCurrentStage('STAGE1');
-    }
+    setCurrentStage(getStartingStage(items[0]));
   };
 
   const handleToggleIncorrect = (itemId: string) => {
@@ -334,8 +338,16 @@ export default function App() {
         lastStudiedAt: new Date().toISOString()
       }
     };
-    saveProgressToStorage(updated);
-    setCurrentStage('STAGE2');
+
+    if (verseStageMode === 'STAGE1_ONLY' && currentItem.type !== ItemType.Exam) {
+      setStageThreeScore(100);
+      handleCorrect(currentItem.id);
+      saveProgressToStorage({ ...updated, [currentItem.id]: { ...updated[currentItem.id], stage3Completed: true } });
+      setCurrentStage('SUMMARY');
+    } else {
+      saveProgressToStorage(updated);
+      setCurrentStage('STAGE2');
+    }
   };
 
   // Update progress for Stage 2
@@ -363,7 +375,7 @@ export default function App() {
     };
     saveProgressToStorage(updated);
     
-    if (isExam && examStageMode === 'STAGE1_ONLY') {
+    if ((isExam && examStageMode === 'STAGE1_ONLY') || (!isExam && verseStageMode === 'STAGE2_ONLY')) {
       setStageThreeScore(100);
       handleCorrect(currentItem.id);
       const fullyUpdated = {
@@ -498,6 +510,8 @@ export default function App() {
                 onToggleItemInFolder={handleToggleItemInFolder}
                 examStageMode={examStageMode}
                 onSetExamStageMode={handleSetExamStageMode}
+                verseStageMode={verseStageMode}
+                onSetVerseStageMode={handleSetVerseStageMode}
               />
             </motion.div>
           )}
@@ -759,17 +773,7 @@ export default function App() {
                     {currentQueueIndex < sessionQueue.length - 1 ? (
                       <div className="flex gap-3 w-full">
                         <button
-                          onClick={() => {
-                            if (currentItem.type === ItemType.Exam) {
-                              if (examStageMode === 'STAGE2_ONLY') {
-                                setCurrentStage('STAGE3');
-                              } else {
-                                setCurrentStage('STAGE2');
-                              }
-                            } else {
-                              setCurrentStage('STAGE1');
-                            }
-                          }}
+                          onClick={() => setCurrentStage(getStartingStage(currentItem))}
                           className="flex-1 py-3 border border-slate-300 text-slate-700 hover:bg-slate-100 font-bold rounded-xl transition-all text-sm cursor-pointer"
                         >
                           이 문제 다시 풀기
@@ -780,15 +784,7 @@ export default function App() {
                             setCurrentQueueIndex(nextIdx);
                             const nextItem = sessionQueue[nextIdx];
                             setCurrentItem(nextItem);
-                            if (nextItem.type === ItemType.Exam) {
-                              if (examStageMode === 'STAGE2_ONLY') {
-                                setCurrentStage('STAGE3');
-                              } else {
-                                setCurrentStage('STAGE2');
-                              }
-                            } else {
-                              setCurrentStage('STAGE1');
-                            }
+                            setCurrentStage(getStartingStage(nextItem));
                           }}
                           className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all text-sm shadow-md cursor-pointer flex items-center justify-center gap-1.5"
                         >
@@ -798,17 +794,7 @@ export default function App() {
                     ) : (
                       <div className="flex gap-3 w-full">
                         <button
-                          onClick={() => {
-                            if (currentItem.type === ItemType.Exam) {
-                              if (examStageMode === 'STAGE2_ONLY') {
-                                setCurrentStage('STAGE3');
-                              } else {
-                                setCurrentStage('STAGE2');
-                              }
-                            } else {
-                              setCurrentStage('STAGE1');
-                            }
-                          }}
+                          onClick={() => setCurrentStage(getStartingStage(currentItem))}
                           className="flex-1 py-3 border border-slate-300 text-slate-700 hover:bg-slate-100 font-bold rounded-xl transition-all text-sm cursor-pointer"
                         >
                           마지막 문제 다시 풀기
@@ -842,17 +828,7 @@ export default function App() {
                 ) : (
                   <div className="flex gap-3 w-full">
                     <button
-                      onClick={() => {
-                        if (currentItem.type === ItemType.Exam) {
-                          if (examStageMode === 'STAGE2_ONLY') {
-                            setCurrentStage('STAGE3');
-                          } else {
-                            setCurrentStage('STAGE2');
-                          }
-                        } else {
-                          setCurrentStage('STAGE1');
-                        }
-                      }}
+                      onClick={() => setCurrentStage(getStartingStage(currentItem))}
                       className="flex-1 py-3 border border-slate-300 text-slate-700 hover:bg-slate-100 font-bold rounded-xl transition-all text-sm cursor-pointer"
                     >
                       이 카드 처음부터 재도전
