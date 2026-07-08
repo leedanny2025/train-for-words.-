@@ -55,6 +55,7 @@ export default function Dashboard({
   const [renamingFolderName, setRenamingFolderName] = useState<string>('');
   const [activeFolderMenuId, setActiveFolderMenuId] = useState<string | null>(null);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+  const [rangeInput, setRangeInput] = useState<string>('');
 
   // 카테고리별 번호 부여 (전체 items 기준, 필터 변경과 무관하게 일관성 유지)
   const categoryNumbers = useMemo(() => {
@@ -82,6 +83,32 @@ export default function Dashboard({
       else next.add(itemId);
       return next;
     });
+  };
+
+  // "1-10, 15-20, 25" 같은 입력을 파싱해서 해당 번호의 아이템 선택
+  const applyRangeInput = (input: string, targetItems: StudyItem[]) => {
+    const parts = input.split(',').map(s => s.trim()).filter(Boolean);
+    const targetNumbers = new Set<number>();
+    parts.forEach(part => {
+      const rangeMatch = part.match(/^(\d+)\s*-\s*(\d+)$/);
+      const singleMatch = part.match(/^(\d+)$/);
+      if (rangeMatch) {
+        const start = parseInt(rangeMatch[1]);
+        const end = parseInt(rangeMatch[2]);
+        for (let n = Math.min(start, end); n <= Math.max(start, end); n++) {
+          targetNumbers.add(n);
+        }
+      } else if (singleMatch) {
+        targetNumbers.add(parseInt(singleMatch[1]));
+      }
+    });
+    if (targetNumbers.size === 0) return;
+    const newSelected = new Set<string>();
+    targetItems.forEach(item => {
+      const num = categoryNumbers.get(item.id);
+      if (num !== undefined && targetNumbers.has(num)) newSelected.add(item.id);
+    });
+    setSelectedItemIds(newSelected);
   };
 
   const getPartForExam = (item: StudyItem): number | null => {
@@ -673,11 +700,11 @@ export default function Dashboard({
 
         {/* 번호 선택 패널 (VERSE / EXAM / CUSTOM 필터 활성 시) */}
         {(activeFilter === 'VERSE' || activeFilter === 'EXAM' || activeFilter === 'CUSTOM') && filteredItems.length > 0 && (
-          <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-3xs">
-            <div className="flex items-center justify-between mb-3">
+          <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-3xs flex flex-col gap-3">
+            <div className="flex items-center justify-between">
               <p className="text-xs font-bold text-slate-700">
                 🔢 번호 선택 후 시험보기
-                <span className="text-[10px] font-medium text-slate-400 ml-1">— 번호 클릭으로 선택/해제</span>
+                <span className="text-[10px] font-medium text-slate-400 ml-1">— 번호 클릭 또는 범위 입력</span>
               </p>
               <div className="flex items-center gap-2">
                 <button
@@ -688,7 +715,7 @@ export default function Dashboard({
                 </button>
                 {selectedItemIds.size > 0 && (
                   <button
-                    onClick={() => setSelectedItemIds(new Set())}
+                    onClick={() => { setSelectedItemIds(new Set()); setRangeInput(''); }}
                     className="text-[10px] font-bold text-rose-500 hover:text-rose-700 cursor-pointer"
                   >
                     초기화
@@ -696,6 +723,31 @@ export default function Dashboard({
                 )}
               </div>
             </div>
+
+            {/* 범위 입력 */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                applyRangeInput(rangeInput, filteredItems);
+              }}
+              className="flex gap-2 items-center"
+            >
+              <input
+                type="text"
+                value={rangeInput}
+                onChange={(e) => setRangeInput(e.target.value)}
+                placeholder="예: 1-10  또는  1-10, 15-20, 25"
+                className="flex-1 text-xs px-3 py-2 rounded-lg border border-slate-200 focus:outline-none focus:border-indigo-400 bg-slate-50 text-slate-700 font-medium placeholder-slate-400"
+              />
+              <button
+                type="submit"
+                className="text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-2 rounded-lg cursor-pointer transition-colors whitespace-nowrap"
+              >
+                범위 적용
+              </button>
+            </form>
+
+            {/* 번호 그리드 */}
             <div className="flex flex-wrap gap-1.5">
               {filteredItems.map(item => {
                 const num = categoryNumbers.get(item.id) ?? 0;
@@ -708,7 +760,7 @@ export default function Dashboard({
                     key={item.id}
                     onClick={() => toggleSelection(item.id)}
                     title={item.keyword}
-                    className={`w-9 h-9 rounded-lg text-xs font-bold transition-all cursor-pointer relative ${
+                    className={`w-9 h-9 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                       isSelected
                         ? 'bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-300'
                         : mastered
