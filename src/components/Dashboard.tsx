@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { BookOpen, Award, CheckCircle, Flame, PlusCircle, Shuffle, ChevronRight, Check, Folder, FolderPlus, FolderOpen, Trash2, Edit2, Plus, X, Tag } from 'lucide-react';
 import { StudyItem, ProgressState, ItemType } from '../types';
 
@@ -54,6 +54,35 @@ export default function Dashboard({
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
   const [renamingFolderName, setRenamingFolderName] = useState<string>('');
   const [activeFolderMenuId, setActiveFolderMenuId] = useState<string | null>(null);
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
+
+  // 카테고리별 번호 부여 (전체 items 기준, 필터 변경과 무관하게 일관성 유지)
+  const categoryNumbers = useMemo(() => {
+    const numbers = new Map<string, number>();
+    const groups: { [cat: string]: StudyItem[] } = {};
+    items.forEach(item => {
+      if (!groups[item.category]) groups[item.category] = [];
+      groups[item.category].push(item);
+    });
+    Object.values(groups).forEach(group => {
+      const sorted = [...group].sort((a, b) => {
+        const aNum = parseInt(a.id.replace(/[^0-9]/g, '')) || 0;
+        const bNum = parseInt(b.id.replace(/[^0-9]/g, '')) || 0;
+        return aNum - bNum;
+      });
+      sorted.forEach((item, idx) => numbers.set(item.id, idx + 1));
+    });
+    return numbers;
+  }, [items]);
+
+  const toggleSelection = (itemId: string) => {
+    setSelectedItemIds(prev => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  };
 
   const getPartForExam = (item: StudyItem): number | null => {
     if (item.type !== ItemType.Exam) return null;
@@ -642,6 +671,88 @@ export default function Dashboard({
           </div>
         )}
 
+        {/* 번호 선택 패널 (VERSE / EXAM / CUSTOM 필터 활성 시) */}
+        {(activeFilter === 'VERSE' || activeFilter === 'EXAM' || activeFilter === 'CUSTOM') && filteredItems.length > 0 && (
+          <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-3xs">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-xs font-bold text-slate-700">
+                🔢 번호 선택 후 시험보기
+                <span className="text-[10px] font-medium text-slate-400 ml-1">— 번호 클릭으로 선택/해제</span>
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setSelectedItemIds(new Set(filteredItems.map(i => i.id)))}
+                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 cursor-pointer"
+                >
+                  전체 선택
+                </button>
+                {selectedItemIds.size > 0 && (
+                  <button
+                    onClick={() => setSelectedItemIds(new Set())}
+                    className="text-[10px] font-bold text-rose-500 hover:text-rose-700 cursor-pointer"
+                  >
+                    초기화
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {filteredItems.map(item => {
+                const num = categoryNumbers.get(item.id) ?? 0;
+                const isSelected = selectedItemIds.has(item.id);
+                const p = progress[item.id];
+                const isExam = item.type === ItemType.Exam;
+                const mastered = p && (isExam ? p.stage2Completed && p.stage3Completed : p.stage1Completed && p.stage2Completed && p.stage3Completed);
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => toggleSelection(item.id)}
+                    title={item.keyword}
+                    className={`w-9 h-9 rounded-lg text-xs font-bold transition-all cursor-pointer relative ${
+                      isSelected
+                        ? 'bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-300'
+                        : mastered
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-indigo-100 hover:text-indigo-700'
+                          : 'bg-slate-100 text-slate-600 hover:bg-indigo-100 hover:text-indigo-700'
+                    }`}
+                  >
+                    {num}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 선택된 문제 시험 실행 바 */}
+        {selectedItemIds.size > 0 && (
+          <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 bg-indigo-600 rounded-full text-white text-xs font-bold flex items-center justify-center shrink-0">
+                {selectedItemIds.size}
+              </span>
+              <span className="text-sm font-bold text-indigo-900">{selectedItemIds.size}개 문제 선택됨</span>
+            </div>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <button
+                onClick={() => setSelectedItemIds(new Set())}
+                className="flex-1 sm:flex-initial text-xs font-bold text-slate-600 border border-slate-300 bg-white hover:bg-slate-50 px-3 py-2 rounded-xl cursor-pointer transition-all"
+              >
+                선택 초기화
+              </button>
+              <button
+                onClick={() => {
+                  const selected = items.filter(i => selectedItemIds.has(i.id));
+                  onStartSequentialStudy(selected);
+                }}
+                className="flex-1 sm:flex-initial text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-xl cursor-pointer transition-all shadow-sm"
+              >
+                선택한 {selectedItemIds.size}개 순차 시험보기 →
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Card Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4" id="questions-grid-view">
           {filteredItems.length === 0 ? (
@@ -678,9 +789,22 @@ export default function Dashboard({
                   <div>
                     {/* Header line */}
                     <div className="flex items-center justify-between gap-2 mb-2">
-                      <span className="px-2.5 py-0.5 text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200 rounded-md">
-                        {item.category}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => toggleSelection(item.id)}
+                          title="클릭하여 선택/해제"
+                          className={`w-7 h-7 rounded-lg text-[11px] font-bold shrink-0 transition-all cursor-pointer ${
+                            selectedItemIds.has(item.id)
+                              ? 'bg-indigo-600 text-white shadow-sm'
+                              : 'bg-slate-100 text-slate-500 hover:bg-indigo-100 hover:text-indigo-700'
+                          }`}
+                        >
+                          {categoryNumbers.get(item.id) ?? '·'}
+                        </button>
+                        <span className="px-2.5 py-0.5 text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200 rounded-md">
+                          {item.category}
+                        </span>
+                      </div>
                       <div className="flex items-center gap-1.5 pr-0.5">
                         <div className="relative inline-block text-left">
                           <button
