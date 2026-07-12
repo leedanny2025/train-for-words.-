@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, Trophy, RotateCcw, AlertTriangle, CheckCircle, Lightbulb, Keyboard } from 'lucide-react';
+import { Sparkles, Trophy, RotateCcw, AlertTriangle, CheckCircle, Lightbulb, Keyboard, Mic, MicOff } from 'lucide-react';
 import { StudyItem, ItemType } from '../types';
 import { calculateSimilarity, isCorrectAnswer } from '../utils';
 
@@ -16,6 +16,48 @@ export default function FullWriteStage({ item, onCompleted, onExit, onIncorrect 
   const [isChecked, setIsChecked] = useState(false);
   const [score, setScore] = useState(0);
   const [showHint, setShowHint] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [interimText, setInterimText] = useState('');
+  const recognitionRef = useRef<any>(null);
+
+  const startRecording = () => {
+    const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognitionAPI) {
+      alert('이 브라우저는 음성 인식을 지원하지 않습니다.\nChrome 브라우저를 사용해주세요.');
+      return;
+    }
+    const recognition = new SpeechRecognitionAPI();
+    recognition.lang = 'ko-KR';
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    recognition.onstart = () => setIsRecording(true);
+
+    recognition.onresult = (event: any) => {
+      let interim = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          setUserAnswer(prev => prev + (prev ? ' ' : '') + transcript);
+          setInterimText('');
+        } else {
+          interim += transcript;
+        }
+      }
+      setInterimText(interim);
+    };
+
+    recognition.onend = () => { setIsRecording(false); setInterimText(''); };
+    recognition.onerror = () => { setIsRecording(false); setInterimText(''); };
+
+    recognition.start();
+    recognitionRef.current = recognition;
+  };
+
+  const stopRecording = () => {
+    recognitionRef.current?.stop();
+    recognitionRef.current = null;
+  };
   
   const handleCheck = () => {
     const computedScore = calculateSimilarity(userAnswer, item.fullAnswer);
@@ -105,9 +147,33 @@ export default function FullWriteStage({ item, onCompleted, onExit, onIncorrect 
           <label className="text-sm font-semibold text-slate-600 flex items-center gap-1.5">
             <Keyboard className="w-4 h-4 text-indigo-600" /> 이곳에 답변을 작성하세요:
           </label>
-          <span className="text-xs text-slate-400">최대 허용 글자수: {item.fullAnswer.length * 2}자</span>
+          <div className="flex items-center gap-2">
+            {!isChecked && (
+              <button
+                onClick={isRecording ? stopRecording : startRecording}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer border ${
+                  isRecording
+                    ? 'bg-red-50 border-red-300 text-red-600 hover:bg-red-100'
+                    : 'bg-white border-slate-300 text-slate-600 hover:border-indigo-400 hover:text-indigo-600'
+                }`}
+                title={isRecording ? '녹음 중지' : '음성으로 입력'}
+              >
+                {isRecording ? (
+                  <>
+                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse inline-block" />
+                    <MicOff className="w-3.5 h-3.5" /> 중지
+                  </>
+                ) : (
+                  <>
+                    <Mic className="w-3.5 h-3.5" /> 음성 입력
+                  </>
+                )}
+              </button>
+            )}
+            <span className="text-xs text-slate-400">최대 허용 글자수: {item.fullAnswer.length * 2}자</span>
+          </div>
         </div>
-        
+
         <textarea
           value={userAnswer}
           onChange={(e) => {
@@ -122,11 +188,19 @@ export default function FullWriteStage({ item, onCompleted, onExit, onIncorrect 
               ? score >= 85
                 ? 'bg-indigo-50/15 border-indigo-300'
                 : 'bg-rose-50/20 border-rose-200'
-              : 'bg-white border-slate-300'
+              : isRecording
+                ? 'bg-red-50/30 border-red-200'
+                : 'bg-white border-slate-300'
           }`}
           id="writing-pad-textarea"
         />
-        
+
+        {interimText && (
+          <div className="mt-1.5 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700 italic">
+            <span className="font-semibold not-italic text-amber-800">인식 중: </span>{interimText}
+          </div>
+        )}
+
         {userAnswer.length > 0 && !isChecked && (
           <button
             onClick={() => setUserAnswer('')}
