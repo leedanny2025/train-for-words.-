@@ -5,6 +5,7 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   return {
+    base: '/newtrain-for-words/',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
